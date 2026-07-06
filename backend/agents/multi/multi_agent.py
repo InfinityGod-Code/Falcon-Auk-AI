@@ -1,0 +1,78 @@
+"""
+MultiAgent — composite base for multi-agent systems.
+
+Uses the Composite pattern: treats a group of named sub-agents
+uniformly. Subclasses (SupervisorAgent, SwarmAgent) define
+specific orchestration strategies.
+
+Sub-agents are registered by name and can be any BaseAgent.
+"""
+
+from abc import ABC
+from typing import Any, Generator, Optional
+
+from backend.core.base.tools.tool import Tool
+from backend.llm_providers.base import BaseLLMProvider
+from backend.llm_providers.callback import CallbackManager
+from backend.llm_providers.response import LLMResponse
+from backend.messages.base_message import BaseMessage
+from backend.agents.base_agent import BaseAgent
+
+
+class MultiAgent(BaseAgent, ABC):
+    """
+    Composite container for multiple named sub-agents.
+
+    Provides agent registry (add, get, remove, list) and delegates
+    run() / run_stream() to subclasses via abstract methods.
+
+    Sub-agents do NOT share the parent's message history — each
+    keeps its own internal state.
+    """
+
+    def __init__(
+        self,
+        provider: BaseLLMProvider,
+        tools: Optional[list[Tool]] = None,
+        system_prompt: Optional[str] = None,
+        callbacks: Optional[CallbackManager] = None,
+        name: Optional[str] = None,
+        agents: Optional[dict[str, BaseAgent]] = None,
+    ):
+        super().__init__(provider, tools, system_prompt, callbacks, name)
+        self._agents: dict[str, BaseAgent] = agents or {}
+
+    # ── Sub-agent registry ──────────────────────────────────────────
+
+    def add_agent(self, name: str, agent: BaseAgent):
+        """Register a sub-agent with a unique name."""
+        self._agents[name] = agent
+
+    def get_agent(self, name: str) -> Optional[BaseAgent]:
+        """Retrieve a registered sub-agent by name."""
+        return self._agents.get(name)
+
+    def remove_agent(self, name: str):
+        """Unregister a sub-agent."""
+        self._agents.pop(name, None)
+
+    @property
+    def agent_names(self) -> list[str]:
+        """List all registered sub-agent names."""
+        return list(self._agents.keys())
+
+    def list_agents(self) -> dict[str, BaseAgent]:
+        """Return the full agent registry."""
+        return dict(self._agents)
+
+    # ── Execution (delegated to subclasses) ─────────────────────────
+
+    def run(self, user_input: str, **kwargs) -> LLMResponse:
+        raise NotImplementedError(f"{self.__class__.__name__} must implement run()")
+
+    def run_stream(
+        self, user_input: str, **kwargs
+    ) -> Generator[Any, None, LLMResponse]:
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement run_stream()"
+        )

@@ -37,7 +37,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     ) -> LLMResponse:
         from openai import OpenAI
 
-        client = OpenAI(api_key=self._api_key)
+        client = OpenAI(api_key=self._api_key,base_url=kwargs.get("base_url", None))
 
         raw_messages = [m.to_dict() for m in messages]
         raw_tools = (
@@ -65,7 +65,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     ) -> Generator[LLMResponse, None, None]:
         from openai import OpenAI
 
-        client = OpenAI(api_key=self._api_key)
+        client = OpenAI(api_key=self._api_key,base_url=kwargs.get("base_url", None))
 
         raw_messages = [m.to_dict() for m in messages]
         raw_tools = (
