@@ -1,7 +1,5 @@
 import re
 from typing import Optional
-
-from backend.llm_providers.callback import BaseCallbackHandler
 from backend.security.base import SecurityHandler, SecurityLevel
 
 HARMFUL_CATEGORIES: dict[str, list[str]] = {

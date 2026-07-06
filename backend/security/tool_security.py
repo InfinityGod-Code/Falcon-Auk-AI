@@ -1,7 +1,5 @@
 import json
 from typing import Any, Optional
-
-from backend.llm_providers.callback import BaseCallbackHandler
 from backend.security.base import SecurityHandler, SecurityLevel
 
 

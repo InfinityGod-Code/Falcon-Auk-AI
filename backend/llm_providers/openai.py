@@ -5,7 +5,6 @@ from backend.core.base.tools.tool import Tool
 from backend.messages.base_message import (
     AssistantMessage,
     BaseMessage,
-    ToolMessage,
 )
 from backend.messages.tool_call import ToolCall
 from backend.messages.usage import Usage
@@ -37,7 +36,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     ) -> LLMResponse:
         from openai import OpenAI
 
-        client = OpenAI(api_key=self._api_key,base_url=kwargs.get("base_url", None))
+        client = OpenAI(api_key=self._api_key, base_url=kwargs.get("base_url", None))
 
         raw_messages = [m.to_dict() for m in messages]
         raw_tools = (
@@ -65,7 +64,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     ) -> Generator[LLMResponse, None, None]:
         from openai import OpenAI
 
-        client = OpenAI(api_key=self._api_key,base_url=kwargs.get("base_url", None))
+        client = OpenAI(api_key=self._api_key, base_url=kwargs.get("base_url", None))
 
         raw_messages = [m.to_dict() for m in messages]
         raw_tools = (
@@ -113,13 +112,13 @@ class OpenAILLMProvider(BaseLLMProvider):
                         tool_calls[idx]["id"] = tc_delta.id
                     if tc_delta.function:
                         if tc_delta.function.name:
-                            tool_calls[idx]["function"]["name"] += (
-                                tc_delta.function.name
-                            )
+                            tool_calls[idx]["function"][
+                                "name"
+                            ] += tc_delta.function.name
                         if tc_delta.function.arguments:
-                            tool_calls[idx]["function"]["arguments"] += (
-                                tc_delta.function.arguments
-                            )
+                            tool_calls[idx]["function"][
+                                "arguments"
+                            ] += tc_delta.function.arguments
 
             if chunk.usage:
                 usage = Usage.from_dict(chunk.usage.model_dump())
