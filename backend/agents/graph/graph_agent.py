@@ -16,12 +16,11 @@ from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
-from backend.llm_providers.lifecycle import LLMLifecycle
 from backend.messages.base_message import (
-    BaseMessage,
-    UserMessage,
     AssistantMessage,
 )
+from backend.agents.context import ContextManager
+from backend.agents.checkpoint import CheckpointManager
 from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import AgentEvent, CompletionEvent
 from backend.agents.events.stream_event import (
@@ -117,9 +116,19 @@ class GraphAgent(BaseAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
+        context_manager: Optional[ContextManager] = None,
+        checkpoint_manager: Optional[CheckpointManager] = None,
         max_steps: int = 50,
     ):
-        super().__init__(provider, tools, system_prompt, callbacks, name)
+        super().__init__(
+            provider,
+            tools,
+            system_prompt,
+            callbacks,
+            name,
+            context_manager=context_manager,
+            checkpoint_manager=checkpoint_manager,
+        )
         self._node_map: dict[str, Node] = {n.name: n for n in nodes}
         self._edges: list[Edge] = edges
         self._entry_point = entry_point

@@ -4,6 +4,7 @@ from backend.agents.events.event import (
     ToolResultEvent,
     ThoughtEvent,
     ErrorEvent,
+    CheckpointCreatedEvent,
     CompletionEvent,
 )
 from backend.agents.events.stream_event import (
@@ -20,6 +21,7 @@ __all__ = [
     "ToolResultEvent",
     "ThoughtEvent",
     "ErrorEvent",
+    "CheckpointCreatedEvent",
     "CompletionEvent",
     "StreamEvent",
     "TokenStreamEvent",

@@ -15,8 +15,6 @@ from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
-from backend.messages.base_message import AssistantMessage
-from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import AgentEvent, CompletionEvent
 from backend.agents.events.stream_event import (
     StreamEvent,

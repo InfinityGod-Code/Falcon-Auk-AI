@@ -20,6 +20,8 @@ from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.lifecycle import LLMLifecycle
 from backend.llm_providers.response import LLMResponse
 from backend.messages.base_message import SystemMessage, UserMessage, AssistantMessage
+from backend.agents.context import ContextManager
+from backend.agents.checkpoint import CheckpointManager
 from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import (
     AgentEvent,
@@ -70,10 +72,20 @@ class ReActAgent(BaseAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
+        context_manager: Optional[ContextManager] = None,
+        checkpoint_manager: Optional[CheckpointManager] = None,
         tool_executor: Optional[Callable[[str, str], Any]] = None,
         max_steps: int = 10,
     ):
-        super().__init__(provider, tools, system_prompt, callbacks, name)
+        super().__init__(
+            provider,
+            tools,
+            system_prompt,
+            callbacks,
+            name,
+            context_manager=context_manager,
+            checkpoint_manager=checkpoint_manager,
+        )
         self._tool_executor = tool_executor
         self._max_steps = max_steps
 

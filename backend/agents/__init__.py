@@ -6,11 +6,27 @@ from backend.agents.events import (
     ThoughtEvent,
     ErrorEvent,
     CompletionEvent,
+    CheckpointCreatedEvent,
     StreamEvent,
     TokenStreamEvent,
     ToolCallStreamEvent,
     DoneStreamEvent,
     ErrorStreamEvent,
+)
+from backend.agents.context import (
+    ContextManager,
+    ContextStrategy,
+    SlidingWindowStrategy,
+    TokenBudgetStrategy,
+    SummarizationStrategy,
+)
+from backend.agents.checkpoint import (
+    Checkpoint,
+    CheckpointSummary,
+    CheckpointStore,
+    InMemoryCheckpointStore,
+    LocalFileCheckpointStore,
+    CheckpointManager,
 )
 from backend.agents.mono import MonoAgent, ReActAgent, ToolCallingAgent
 from backend.agents.multi import MultiAgent, SupervisorAgent, SwarmAgent
@@ -33,6 +49,20 @@ __all__ = [
     "ThoughtEvent",
     "ErrorEvent",
     "CompletionEvent",
+    "CheckpointCreatedEvent",
+    # Context
+    "ContextManager",
+    "ContextStrategy",
+    "SlidingWindowStrategy",
+    "TokenBudgetStrategy",
+    "SummarizationStrategy",
+    # Checkpoint
+    "Checkpoint",
+    "CheckpointSummary",
+    "CheckpointStore",
+    "InMemoryCheckpointStore",
+    "LocalFileCheckpointStore",
+    "CheckpointManager",
     "StreamEvent",
     "TokenStreamEvent",
     "ToolCallStreamEvent",

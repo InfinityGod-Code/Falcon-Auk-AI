@@ -25,6 +25,8 @@ from backend.agents.events.stream_event import (
     DoneStreamEvent,
     ErrorStreamEvent,
 )
+from backend.agents.context import ContextManager
+from backend.agents.checkpoint import CheckpointManager
 from backend.agents.multi.multi_agent import MultiAgent
 
 _SUPERVISOR_PROMPT = """You are a supervisor agent. Your job is to decide which specialist
@@ -66,10 +68,21 @@ class SupervisorAgent(MultiAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
+        context_manager: Optional[ContextManager] = None,
+        checkpoint_manager: Optional[CheckpointManager] = None,
         agents: Optional[dict[str, BaseAgent]] = None,
         max_delegations: int = 3,
     ):
-        super().__init__(provider, tools, system_prompt, callbacks, name, agents)
+        super().__init__(
+            provider,
+            tools,
+            system_prompt,
+            callbacks,
+            name,
+            context_manager=context_manager,
+            checkpoint_manager=checkpoint_manager,
+            agents=agents,
+        )
         self._max_delegations = max_delegations
 
         agents_list = "\n".join(

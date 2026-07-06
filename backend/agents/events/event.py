@@ -82,6 +82,17 @@ class ErrorEvent(AgentEvent):
         )
 
 
+class CheckpointCreatedEvent(AgentEvent):
+    """Emitted when a checkpoint is saved during agent execution."""
+
+    def __init__(self, checkpoint_id: str, agent: str):
+        super().__init__(
+            event_type="checkpoint_created",
+            data={"checkpoint_id": checkpoint_id},
+            agent=agent,
+        )
+
+
 class CompletionEvent(AgentEvent):
     """Emitted when an agent finishes a run() successfully."""
 

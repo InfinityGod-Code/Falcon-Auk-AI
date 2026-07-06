@@ -13,6 +13,8 @@ from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
 from backend.llm_providers.lifecycle import LLMLifecycle
 from backend.messages.base_message import SystemMessage, AssistantMessage
+from backend.agents.context import ContextManager
+from backend.agents.checkpoint import CheckpointManager
 from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import CompletionEvent, AgentEvent
 from backend.agents.events.stream_event import (
@@ -43,8 +45,18 @@ class MonoAgent(BaseAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
+        context_manager: Optional[ContextManager] = None,
+        checkpoint_manager: Optional[CheckpointManager] = None,
     ):
-        super().__init__(provider, tools, system_prompt, callbacks, name)
+        super().__init__(
+            provider,
+            tools,
+            system_prompt,
+            callbacks,
+            name,
+            context_manager=context_manager,
+            checkpoint_manager=checkpoint_manager,
+        )
         self._lifecycle = LLMLifecycle(
             provider=provider,
             tools=tools,

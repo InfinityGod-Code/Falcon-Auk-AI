@@ -14,16 +14,15 @@ from typing import Any, Callable, Generator, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.messages.base_message import (
-    BaseMessage,
-    SystemMessage,
-    AssistantMessage,
+    BaseMessage
 )
 from backend.messages.usage import Usage, UsageAccumulator
 from backend.llm_providers.base import BaseLLMProvider
-from backend.llm_providers.callback import BaseCallbackHandler, CallbackManager
+from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
-from backend.llm_providers.lifecycle import _message_from_dict
-from backend.agents.events.event import AgentEvent
+from backend.agents.context import ContextManager
+from backend.agents.checkpoint import CheckpointManager
+from backend.agents.events.event import AgentEvent, CheckpointCreatedEvent
 
 
 class BaseAgent(ABC):
@@ -47,6 +46,8 @@ class BaseAgent(ABC):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
+        context_manager: Optional[ContextManager] = None,
+        checkpoint_manager: Optional[CheckpointManager] = None,
     ):
         self.provider = provider
         self.tools = tools or []
@@ -54,14 +55,12 @@ class BaseAgent(ABC):
         self.system_prompt = system_prompt
         self.name = name or self.__class__.__name__
 
-        self._messages: list[BaseMessage] = []
+        self.context = context_manager or ContextManager(system_prompt=system_prompt)
+        self.checkpoints = checkpoint_manager
         self._usage = UsageAccumulator()
         self._event_listeners: dict[str, list[Callable[[AgentEvent], None]]] = (
             defaultdict(list)
         )
-
-        if system_prompt:
-            self._messages.append(SystemMessage(content=system_prompt))
 
     # ── Abstract execution methods ──────────────────────────────────
 
@@ -107,7 +106,7 @@ class BaseAgent(ABC):
 
     def reset(self):
         """Clear message history and usage (preserves system prompt)."""
-        self._messages = [m for m in self._messages if isinstance(m, SystemMessage)]
+        self.context.clear(keep_system=True)
         self._usage.reset()
 
     def get_state(self) -> dict:
@@ -115,19 +114,64 @@ class BaseAgent(ABC):
         return {
             "name": self.name,
             "system_prompt": self.system_prompt,
-            "messages": [m.to_dict() for m in self._messages],
+            "messages": [m.to_dict() for m in self.context.get_messages()],
+            "context": self.context.to_dict(),
+            "usage": {
+                "prompt_tokens": self.total_usage.prompt_tokens,
+                "completion_tokens": self.total_usage.completion_tokens,
+                "total_tokens": self.total_usage.total_tokens,
+            },
         }
 
     def load_state(self, state: dict):
         """Restore agent state from a previous get_state() snapshot."""
         self.name = state.get("name", self.name)
-        self._messages = [_message_from_dict(m) for m in state.get("messages", [])]
+        ctx_data = state.get("context")
+        if ctx_data:
+            self.context = ContextManager.from_dict(ctx_data)
+        else:
+            from backend.llm_providers.lifecycle import _message_from_dict
+
+            self.context.replace_messages(
+                [_message_from_dict(m) for m in state.get("messages", [])]
+            )
+
+    def create_checkpoint(self, metadata: Optional[dict] = None) -> Optional[str]:
+        """Create a checkpoint of current agent state."""
+        if not self.checkpoints:
+            return None
+        cp = self.checkpoints.save(
+            agent_name=self.name,
+            context_data=self.context.to_dict(),
+            usage_data={
+                "prompt_tokens": self.total_usage.prompt_tokens,
+                "completion_tokens": self.total_usage.completion_tokens,
+                "total_tokens": self.total_usage.total_tokens,
+            },
+            provider_type=self.provider.provider.value
+            if hasattr(self.provider, "provider")
+            else "",
+            provider_model=self.provider.model
+            if hasattr(self.provider, "model")
+            else "",
+            metadata=metadata,
+        )
+        self.emit(
+            CheckpointCreatedEvent(checkpoint_id=cp.checkpoint_id, agent=self.name)
+        )
+        return cp.checkpoint_id
+
+    def restore_from_checkpoint(self, checkpoint_id: str):
+        """Restore agent state from a checkpoint."""
+        if not self.checkpoints:
+            raise RuntimeError("No CheckpointManager configured")
+        self.checkpoints.restore(checkpoint_id, self.context, self._usage)
 
     # ── Properties ──────────────────────────────────────────────────
 
     @property
     def messages(self) -> list[BaseMessage]:
-        return list(self._messages)
+        return self.context.get_messages()
 
     @property
     def total_usage(self) -> Usage:

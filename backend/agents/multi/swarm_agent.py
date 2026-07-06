@@ -29,6 +29,8 @@ from backend.agents.events.stream_event import (
     DoneStreamEvent,
     ErrorStreamEvent,
 )
+from backend.agents.context import ContextManager
+from backend.agents.checkpoint import CheckpointManager
 from backend.agents.multi.multi_agent import MultiAgent
 
 _SYNTHESIS_PROMPT = """You are a synthesis agent. Multiple specialist agents have provided
@@ -67,12 +69,23 @@ class SwarmAgent(MultiAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
+        context_manager: Optional[ContextManager] = None,
+        checkpoint_manager: Optional[CheckpointManager] = None,
         agents: Optional[dict[str, BaseAgent]] = None,
         parallel: bool = True,
         max_workers: int = 4,
         synthesis_prompt: Optional[str] = None,
     ):
-        super().__init__(provider, tools, system_prompt, callbacks, name, agents)
+        super().__init__(
+            provider,
+            tools,
+            system_prompt,
+            callbacks,
+            name,
+            context_manager=context_manager,
+            checkpoint_manager=checkpoint_manager,
+            agents=agents,
+        )
         self._parallel = parallel
         self._max_workers = max_workers
         self._synthesis_prompt_template = synthesis_prompt or _SYNTHESIS_PROMPT
