@@ -6,13 +6,17 @@ No tool loops, no reasoning chains. Wraps LLMLifecycle.run().
 """
 
 from typing import Generator, List, Optional
-
-from backend.core.base.tools.tool import Tool
+from backend.core.base.base_agent_callback import BaseAgentCallback
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
 from backend.llm_providers.lifecycle import LLMLifecycle
-from backend.messages.base_message import BaseMessage, SystemMessage, AssistantMessage, UserMessage
+from backend.messages.base_message import (
+    BaseMessage,
+    SystemMessage,
+    AssistantMessage,
+    UserMessage,
+)
 from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager
 from backend.agents.base_agent import BaseAgent
@@ -23,7 +27,7 @@ from backend.agents.events.stream_event import (
     DoneStreamEvent,
     ErrorStreamEvent,
 )
-from backend.tool_runtime_context import ToolRegistry
+from backend.tool_registry import ToolRegistry
 
 
 class MonoAgent(BaseAgent):
@@ -48,6 +52,7 @@ class MonoAgent(BaseAgent):
         name: Optional[str] = None,
         context_manager: Optional[MemoryContextManager] = None,
         checkpoint_manager: Optional[CheckpointManager] = None,
+        agent_callback: Optional[BaseAgentCallback] = None,
     ):
         super().__init__(
             provider,
@@ -62,23 +67,84 @@ class MonoAgent(BaseAgent):
             provider=provider,
             tools=tools,
         )
+        self.agent_callback = agent_callback
         if system_prompt:
             self._lifecycle.add_message(SystemMessage(content=system_prompt))
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    def run(self, user_input: str, max_iters: int = 10, **kwargs) -> LLMResponse:
+        from backend.agents.tool_executor import ToolExecutor
+        from backend.agents.states.agent_state import AgentState
+        from backend.messages.base_message import ToolMessage
+
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
-        list_messages : List[BaseMessage] = []
-        list_messages.append(SystemMessage(content=self.system_prompt))
-        list_messages.append(UserMessage(content=user_input))
+        executor = ToolExecutor(self.tools) if self.tools else None
 
-        response = self.provider.generate(
-            messages=list_messages ,tool_runtime_context=self.tools,model="")
+        messages: List[BaseMessage] = [
+            SystemMessage(content=self.system_prompt),
+            UserMessage(content=user_input),
+        ]
 
-        # self._usage.add(response.usage)
-        # self._messages.append(self._lifecycle.messages[-2])  # user message
-        # self._messages.append(self._lifecycle.messages[-1])  # assistant message
-        # self.emit(CompletionEvent(response.message.content, response.usage, self.name))
+        def _cb(**overrides):
+            if not self.agent_callback:
+                return
+            kwargs = dict(
+                total_token_consumed=None,
+                current_tool=None,
+                message_length=len(messages),
+                retry_count=None,
+                tool_name=None,
+            )
+            kwargs.update(overrides)
+            self.agent_callback.state(AgentState(**kwargs))
+
+        def _log(msg: str):
+            if self.agent_callback:
+                self.agent_callback.logs(msg)
+
+        _cb(total_token_consumed=0, retry_count=0)
+        _log("[MonoAgent] Run started")
+
+        for i in range(max_iters):
+            response = self.provider.generate(
+                messages=messages, tool_runtime_context=self.tools
+            )
+
+            messages.append(response.message)
+            tokens = response.usage.total_tokens if response.usage else 0
+
+            if not response.message.tool_calls:
+                _cb(total_token_consumed=tokens, retry_count=i)
+                _log("[MonoAgent] LLM responded with final answer")
+                return response
+
+            _cb(total_token_consumed=tokens, retry_count=i)
+            _log(
+                f"[MonoAgent] LLM responded with {len(response.message.tool_calls)} tool call(s)"
+            )
+
+            if executor:
+                for tc in response.message.tool_calls:
+                    _cb(current_tool=tc.function["name"], tool_name=tc.function["name"])
+                    _log(f"[MonoAgent] Executing tool: {tc.function['name']}")
+
+                    result = executor.execute(tc)
+                    messages.append(
+                        ToolMessage(
+                            content=result,
+                            tool_call_id=tc.id,
+                            name=tc.function["name"],
+                        )
+                    )
+
+                    _log(
+                        f"[MonoAgent] Tool '{tc.function['name']}' returned: {result[:60]}"
+                    )
+
+        _cb(retry_count=max_iters)
+        _log(
+            f"[MonoAgent] Max iterations ({max_iters}) reached, returning last response"
+        )
         return response
 
     def run_stream(

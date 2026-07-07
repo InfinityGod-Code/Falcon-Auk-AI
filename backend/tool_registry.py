@@ -1,4 +1,4 @@
-from typing import Dict,List
+from typing import Dict, List, Optional
 from backend.core.base.tools.tool import Tool
 from backend.core.base.models.model import ModelProvider
 
@@ -13,6 +13,9 @@ class ToolRegistry:
     def register_tool(self, tool_instance: Tool):
         self._registry[tool_instance.name] = tool_instance
         print(f"✅ System Context: Registered '{tool_instance.name}' tool.")
+
+    def get_tool(self, name: str) -> Optional[Tool]:
+        return self._registry.get(name)
 
     def get_all_schemas(self, target_provider: ModelProvider) -> List[Dict]:
         return [t.to_model_specific(target_provider) for t in self._registry.values()]

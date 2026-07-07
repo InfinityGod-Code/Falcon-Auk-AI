@@ -6,7 +6,7 @@ from backend.messages.tool_call import ToolCall
 from backend.messages.usage import Usage
 from backend.llm_providers.callback import BaseCallbackHandler, CallbackManager
 from backend.llm_providers.response import LLMResponse
-from backend.tool_runtime_context import ToolRegistry
+from backend.tool_registry import ToolRegistry
 
 
 class BaseLLMProvider(ABC):

@@ -5,7 +5,7 @@ from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager, InMemoryCheckpointStore
 from backend.llm_providers.lifecycle import LLMLifecycle
 from backend.llm_providers.openai import OpenAILLMProvider
-from backend.tool_runtime_context import ToolRegistry
+from backend.tool_registry import ToolRegistry
 
 
 class Container(containers.DeclarativeContainer):

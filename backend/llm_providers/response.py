@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from backend.messages.base_message import AssistantMessage
 from backend.messages.usage import Usage

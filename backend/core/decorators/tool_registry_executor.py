@@ -1,4 +1,4 @@
-from backend.tool_runtime_context import ToolRegistry
+from backend.tool_registry import ToolRegistry
 from backend.tools.open_ai.falcon_auk_tool import FalconAukTool
 
 
@@ -19,3 +19,5 @@ class ToolRegistryExecutor:
 
         return decorator
 
+    def get_all_schemas(self, provider: str) -> list:
+        return self.context.get_all_schemas(provider)

@@ -12,7 +12,7 @@ from backend.messages.tool_call import ToolCall
 from backend.messages.usage import Usage, UsageAccumulator
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.response import LLMResponse
-from backend.tool_runtime_context import ToolRegistry
+from backend.tool_registry import ToolRegistry
 
 
 def _message_from_dict(data: dict) -> BaseMessage:

@@ -3,57 +3,67 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# uv run python backend/main.py
-
-from backend.core.decorators.tool_registry import ToolRegistryExecutor
-from backend.core.dependencies.dependency import container
+from backend.agents.states.agent_state import AgentState
+from backend.core.base.base_agent_callback import BaseAgentCallback
 from backend.core.base.models.model import ModelProvider
 
-tool_registration1 = container.tool_registry()
-registry = ToolRegistryExecutor(tool_registration1)
+# uv run python backend/main.py
 
-tool_registration2 = container.tool_registry()
-registry2 = ToolRegistryExecutor(tool_registration2)
+from rich.console import Console
+
+from backend.llm_providers.openai import OpenAILLMProvider
+from backend.agents.mono.mono_agent import MonoAgent
+from backend.core.decorators.tool_registry_executor import ToolRegistryExecutor
+from backend.core.dependencies.dependency import container
+
+console = Console()
+
+console.log("[bold blue]Starting Falcon-Auk-AI ...[/bold blue]")
+
+tool_registration = container.tool_registry()
+registry = ToolRegistryExecutor(tool_registration)
 
 
 @registry.tool(
-    name="sample_function",
-    description="A sample function that takes a string and an integer and returns a formatted string.",
+    name="get_weather",
+    description="Provides the current weather based on the location.",
 )
-def sample_function(param1: str, param2: int) -> str:
-    """
-    A sample function that takes a string and an integer and returns a formatted string.
-    """
-    return f"Received string: {param1} and integer: {param2}"
+def get_weather(location: str) -> str:
+    return f"The current weather of the {location} is 21 degree celcius and rainy and cold."
 
 
-@registry.tool(
-    name="another_sample_function",
-    description="Another sample function that takes a string and an integer and returns a formatted string.",
+console.log(
+    f"[bold green]Tool registered: get_weather[/bold green] {tool_registration.get_all_schemas(ModelProvider.OPENAI)}"
 )
-def another_sample_function(param1: str, param2: int) -> str:
-    """
-    Another sample function that takes a string and an integer and returns a formatted string.
-    """
-    return f"Another function received string: {param1} and integer: {param2}"
 
 
-@registry2.tool(
-    name="third_sample_function",
-    description="A third sample function that takes a string and an integer and returns a formatted string.",
+class Listener(BaseAgentCallback):
+    def state(self, state: AgentState):
+        print(f"agent state : {state.current_tool}")
+
+    def logs(self, logs):
+        print(f"LOGS FROM AGENT : {logs}")
+
+
+mono_agent = MonoAgent(
+    provider=OpenAILLMProvider(
+        api_key="",
+        model="openai/gpt-oss-20b",
+        base_url="https://api.groq.com/openai/v1",
+    ),
+    tools=tool_registration,
+    system_prompt="You are helpful assistant.",
+    agent_callback=Listener(),
 )
-def third_sample_function(param1: str, param2: int) -> str:
-    """
-    A third sample function that takes a string and an integer and returns a formatted string.
-    """
-    return f"Third function received string: {param1} and integer: {param2}"
 
+console.log("[bold green]MonoAgent initialized[/bold green]")
 
+user_input = "What is the Weather is Paris ?"
+console.log(f'[bold yellow]Sending user input: "{user_input}"[/bold yellow]')
 
+response = mono_agent.run(user_input=user_input)
 
+console.log(f"[bold cyan]Response received: {response.message}[/bold cyan]")
 print(
-    f"✅ System Context: Current model provider is set to {tool_registration1.get_all_schemas(ModelProvider.OPENAI)}"
-)
-print(
-    f"✅ System Context: Registered tools: {tool_registration2.get_all_schemas(ModelProvider.OPENAI)}"
+    f"Response from the LLM is here : {response.message} and raw : {response.raw_response} usage : {response.usage.total_tokens}"
 )

@@ -11,7 +11,10 @@ from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
 from rich.console import Console
 
-from backend.tool_runtime_context import ToolRegistry
+from backend.tool_registry import ToolRegistry
+from backend.adapters.openai_adapter import OpenAIAdapter
+
+console = Console()
 
 
 class OpenAILLMProvider(BaseLLMProvider):
@@ -23,7 +26,9 @@ class OpenAILLMProvider(BaseLLMProvider):
         **kwargs,
     ):
         super().__init__(api_key=api_key, model=model, callbacks=callbacks, **kwargs)
+        self._base_url = kwargs.get("base_url")
         self._max_tokens = kwargs.get("max_tokens", 4096)
+        self._adapter = OpenAIAdapter()
 
     @property
     def provider(self) -> ModelProvider:
@@ -37,12 +42,22 @@ class OpenAILLMProvider(BaseLLMProvider):
     ) -> LLMResponse:
         from openai import OpenAI
 
-        client = OpenAI(api_key=self._api_key, base_url=kwargs.get("base_url", None))
+        console.log(
+            f"[bold green]OpenAI Provider: base URL : {self._base_url}[/bold green]"
+        )
 
-        raw_messages = [m.to_dict() for m in messages]
+        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
 
-        raw_tools = tool_runtime_context.get_all_schemas(ModelProvider.OPENAI) if tool_runtime_context else None
-        Console().log(f"[bold green]OpenAI Provider: Generating response with model {raw_tools}[/bold green]")
+        raw_messages = self._adapter.convert_messages(messages)
+
+        raw_tools = (
+            self._adapter.convert_tools(tool_runtime_context)
+            if tool_runtime_context
+            else None
+        )
+        console.log(
+            f"[bold green]OpenAI Provider: Generating response with model {raw_tools}[/bold green]"
+        )
 
         params = {
             "model": kwargs.get("model", self._model),
@@ -53,7 +68,15 @@ class OpenAILLMProvider(BaseLLMProvider):
             params["tools"] = raw_tools
 
         response = client.chat.completions.create(**params)
-        return self._parse_response(response)
+        normalized = self._adapter.normalize_response(response)
+
+        return LLMResponse(
+            message=AssistantMessage(
+                content=normalized.content, tool_calls=normalized.tool_calls
+            ),
+            usage=normalized.usage,
+            raw_response=response,
+        )
 
     def generate_stream(
         self,
@@ -63,10 +86,14 @@ class OpenAILLMProvider(BaseLLMProvider):
     ) -> Generator[LLMResponse, None, None]:
         from openai import OpenAI
 
-        client = OpenAI(api_key=self._api_key, base_url=kwargs.get("base_url", None))
+        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
 
-        raw_messages = [m.to_dict() for m in messages]
-        raw_tools = tool_runtime_context.get_all_schemas(ModelProvider.OPENAI) if tool_runtime_context else None
+        raw_messages = self._adapter.convert_messages(messages)
+        raw_tools = (
+            self._adapter.convert_tools(tool_runtime_context)
+            if tool_runtime_context
+            else None
+        )
 
         params = {
             "model": kwargs.get("model", self._model),
@@ -107,13 +134,13 @@ class OpenAILLMProvider(BaseLLMProvider):
                         tool_calls[idx]["id"] = tc_delta.id
                     if tc_delta.function:
                         if tc_delta.function.name:
-                            tool_calls[idx]["function"][
-                                "name"
-                            ] += tc_delta.function.name
+                            tool_calls[idx]["function"]["name"] += (
+                                tc_delta.function.name
+                            )
                         if tc_delta.function.arguments:
-                            tool_calls[idx]["function"][
-                                "arguments"
-                            ] += tc_delta.function.arguments
+                            tool_calls[idx]["function"]["arguments"] += (
+                                tc_delta.function.arguments
+                            )
 
             if chunk.usage:
                 usage = Usage.from_dict(chunk.usage.model_dump())
@@ -148,57 +175,11 @@ class OpenAILLMProvider(BaseLLMProvider):
             )
 
     def get_usage(self, raw_response) -> Usage:
-        if raw_response and hasattr(raw_response, "usage") and raw_response.usage:
-            return Usage.from_dict(raw_response.usage.model_dump())
-        return Usage()
+        return self._adapter.normalize_response(raw_response).usage
 
     def get_tool_calls(self, raw_response) -> list[ToolCall]:
-        if (
-            not raw_response
-            or not hasattr(raw_response, "choices")
-            or not raw_response.choices
-        ):
-            return []
-        msg = raw_response.choices[0].message
-        if not msg.tool_calls:
-            return []
-        return [
-            ToolCall(
-                id=tc.id,
-                name=tc.function.name,
-                arguments=tc.function.arguments,
-            )
-            for tc in msg.tool_calls
-        ]
-
-    def _parse_response(self, raw_response) -> LLMResponse:
-        choice = raw_response.choices[0]
-        msg = choice.message
-
-        tool_calls = None
-        if msg.tool_calls:
-            tool_calls = [
-                ToolCall(
-                    id=tc.id, name=tc.function.name, arguments=tc.function.arguments
-                )
-                for tc in msg.tool_calls
-            ]
-
-        usage = Usage()
-        if raw_response.usage:
-            usage = Usage(
-                prompt_tokens=raw_response.usage.prompt_tokens or 0,
-                completion_tokens=raw_response.usage.completion_tokens or 0,
-                total_tokens=raw_response.usage.total_tokens or 0,
-            )
-
-        assistant_msg = AssistantMessage(
-            content=msg.content or "", tool_calls=tool_calls
-        )
-
-        return LLMResponse(
-            message=assistant_msg, usage=usage, raw_response=raw_response
-        )
+        normalized = self._adapter.normalize_response(raw_response)
+        return normalized.tool_calls or []
 
     @classmethod
     def from_dict(cls, data: dict, api_key: str) -> "OpenAILLMProvider":
