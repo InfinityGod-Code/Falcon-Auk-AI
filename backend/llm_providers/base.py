@@ -1,13 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Generator, Optional
-
 from backend.core.base.models.model import ModelProvider
-from backend.core.base.tools.tool import Tool
-from backend.messages.base_message import BaseMessage, AssistantMessage
+from backend.messages.base_message import BaseMessage
 from backend.messages.tool_call import ToolCall
 from backend.messages.usage import Usage
 from backend.llm_providers.callback import BaseCallbackHandler, CallbackManager
 from backend.llm_providers.response import LLMResponse
+from backend.tool_runtime_context import ToolRegistry
 
 
 class BaseLLMProvider(ABC):
@@ -35,7 +34,7 @@ class BaseLLMProvider(ABC):
     def generate(
         self,
         messages: list[BaseMessage],
-        tools: Optional[list[Tool]] = None,
+        tool_runtime_context: Optional[ToolRegistry] = None,
         **kwargs,
     ) -> LLMResponse:
         pass
@@ -44,7 +43,7 @@ class BaseLLMProvider(ABC):
     def generate_stream(
         self,
         messages: list[BaseMessage],
-        tools: Optional[list[Tool]] = None,
+        tool_runtime_context: Optional[ToolRegistry] = None,
         **kwargs,
     ) -> Generator[LLMResponse, None, None]:
         pass

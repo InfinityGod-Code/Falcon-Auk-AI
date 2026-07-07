@@ -22,6 +22,7 @@ from backend.messages.base_message import (
     UserMessage,
     AssistantMessage,
 )
+from backend.messages.usage import UsageAccumulator
 from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import AgentEvent, CompletionEvent
 from backend.agents.events.stream_event import (
@@ -29,7 +30,7 @@ from backend.agents.events.stream_event import (
     DoneStreamEvent,
     ErrorStreamEvent,
 )
-from backend.agents.context import ContextManager
+from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager
 from backend.agents.multi.multi_agent import MultiAgent
 
@@ -69,12 +70,14 @@ class SwarmAgent(MultiAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
-        context_manager: Optional[ContextManager] = None,
+        context_manager: Optional[MemoryContextManager] = None,
         checkpoint_manager: Optional[CheckpointManager] = None,
         agents: Optional[dict[str, BaseAgent]] = None,
         parallel: bool = True,
         max_workers: int = 4,
         synthesis_prompt: Optional[str] = None,
+        lifecycle: Optional[LLMLifecycle] = None,
+        usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         super().__init__(
             provider,
@@ -85,11 +88,15 @@ class SwarmAgent(MultiAgent):
             context_manager=context_manager,
             checkpoint_manager=checkpoint_manager,
             agents=agents,
+            usage_accumulator=usage_accumulator,
         )
         self._parallel = parallel
         self._max_workers = max_workers
         self._synthesis_prompt_template = synthesis_prompt or _SYNTHESIS_PROMPT
-        self._lifecycle = LLMLifecycle(provider=provider, tools=None)
+        if lifecycle is not None:
+            self._lifecycle = lifecycle
+        else:
+            self._lifecycle = LLMLifecycle(provider=provider, tools=None)
 
     def _run_agents_sequential(self, user_input: str, **kwargs) -> dict[str, str]:
         results = {}

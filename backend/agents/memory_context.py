@@ -12,15 +12,11 @@ from typing import Any, Callable, Optional
 from backend.messages.base_message import (
     BaseMessage,
     SystemMessage,
-    UserMessage,
-    AssistantMessage,
-    ToolMessage,
 )
-from backend.messages.tool_call import ToolCall
 from backend.llm_providers.lifecycle import _message_from_dict
 
 
-class ContextStrategy(ABC):
+class MemoryContextStrategy(ABC):
     """
     Strategy for managing context within a token budget.
 
@@ -42,7 +38,7 @@ class ContextStrategy(ABC):
         ...
 
 
-class NoOpStrategy(ContextStrategy):
+class NoOpStrategy(MemoryContextStrategy):
     """Pass through — no trimming applied."""
 
     def apply(
@@ -54,7 +50,7 @@ class NoOpStrategy(ContextStrategy):
         return list(messages)
 
 
-class SlidingWindowStrategy(ContextStrategy):
+class SlidingWindowStrategy(MemoryContextStrategy):
     """
     Keep the last N messages. Drops older messages beyond the window.
 
@@ -83,7 +79,7 @@ class SlidingWindowStrategy(ContextStrategy):
         return system + trimmed
 
 
-class TokenBudgetStrategy(ContextStrategy):
+class TokenBudgetStrategy(MemoryContextStrategy):
     """
     Trim oldest non-system messages until the total estimated
     token count fits within max_tokens.
@@ -115,7 +111,7 @@ class TokenBudgetStrategy(ContextStrategy):
         return result
 
 
-class SummarizationStrategy(ContextStrategy):
+class SummarizationStrategy(MemoryContextStrategy):
     """
     Replace oldest messages with a single summary system message
     when the token budget is exceeded.
@@ -155,7 +151,7 @@ class SummarizationStrategy(ContextStrategy):
         return self._summary
 
 
-class ContextManager:
+class MemoryContextManager:
     """
     Owns all agent context: messages, variables, metadata, and token budget.
 
@@ -167,7 +163,7 @@ class ContextManager:
         self,
         system_prompt: Optional[str] = None,
         max_tokens: int = 128000,
-        strategy: Optional[ContextStrategy] = None,
+        strategy: Optional[MemoryContextStrategy] = None,
         token_counter: Optional[Callable[[list[BaseMessage]], int]] = None,
     ):
         self._messages: list[BaseMessage] = []
@@ -179,8 +175,6 @@ class ContextManager:
 
         if system_prompt:
             self._messages.append(SystemMessage(content=system_prompt))
-
-    # ── Message API ─────────────────────────────────────────────────
 
     def add_message(self, message: BaseMessage):
         self._messages.append(message)
@@ -252,7 +246,7 @@ class ContextManager:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ContextManager":
+    def from_dict(cls, data: dict) -> "MemoryContextManager":
         cm = cls(
             max_tokens=data.get("max_tokens", 128000),
         )

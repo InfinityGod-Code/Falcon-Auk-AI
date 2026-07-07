@@ -19,7 +19,8 @@ from backend.llm_providers.response import LLMResponse
 from backend.messages.base_message import (
     AssistantMessage,
 )
-from backend.agents.context import ContextManager
+from backend.messages.usage import UsageAccumulator
+from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager
 from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import AgentEvent, CompletionEvent
@@ -116,9 +117,10 @@ class GraphAgent(BaseAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
-        context_manager: Optional[ContextManager] = None,
+        context_manager: Optional[MemoryContextManager] = None,
         checkpoint_manager: Optional[CheckpointManager] = None,
         max_steps: int = 50,
+        usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         super().__init__(
             provider,
@@ -128,6 +130,7 @@ class GraphAgent(BaseAgent):
             name,
             context_manager=context_manager,
             checkpoint_manager=checkpoint_manager,
+            usage_accumulator=usage_accumulator,
         )
         self._node_map: dict[str, Node] = {n.name: n for n in nodes}
         self._edges: list[Edge] = edges

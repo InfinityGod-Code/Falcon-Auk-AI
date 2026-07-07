@@ -13,14 +13,12 @@ from collections import defaultdict
 from typing import Any, Callable, Generator, Optional
 
 from backend.core.base.tools.tool import Tool
-from backend.messages.base_message import (
-    BaseMessage
-)
+from backend.messages.base_message import BaseMessage
 from backend.messages.usage import Usage, UsageAccumulator
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
-from backend.agents.context import ContextManager
+from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager
 from backend.agents.events.event import AgentEvent, CheckpointCreatedEvent
 
@@ -46,8 +44,9 @@ class BaseAgent(ABC):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
-        context_manager: Optional[ContextManager] = None,
+        context_manager: Optional[MemoryContextManager] = None,
         checkpoint_manager: Optional[CheckpointManager] = None,
+        usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         self.provider = provider
         self.tools = tools or []
@@ -55,9 +54,11 @@ class BaseAgent(ABC):
         self.system_prompt = system_prompt
         self.name = name or self.__class__.__name__
 
-        self.context = context_manager or ContextManager(system_prompt=system_prompt)
+        self.context = context_manager or MemoryContextManager(
+            system_prompt=system_prompt
+        )
         self.checkpoints = checkpoint_manager
-        self._usage = UsageAccumulator()
+        self._usage = usage_accumulator or UsageAccumulator()
         self._event_listeners: dict[str, list[Callable[[AgentEvent], None]]] = (
             defaultdict(list)
         )
@@ -128,7 +129,7 @@ class BaseAgent(ABC):
         self.name = state.get("name", self.name)
         ctx_data = state.get("context")
         if ctx_data:
-            self.context = ContextManager.from_dict(ctx_data)
+            self.context = MemoryContextManager.from_dict(ctx_data)
         else:
             from backend.llm_providers.lifecycle import _message_from_dict
 

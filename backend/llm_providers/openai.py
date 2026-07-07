@@ -1,7 +1,5 @@
 from typing import Generator, Optional
-
 from backend.core.base.models.model import ModelProvider
-from backend.core.base.tools.tool import Tool
 from backend.messages.base_message import (
     AssistantMessage,
     BaseMessage,
@@ -11,6 +9,9 @@ from backend.messages.usage import Usage
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
+from rich.console import Console
+
+from backend.tool_runtime_context import ToolRegistry
 
 
 class OpenAILLMProvider(BaseLLMProvider):
@@ -31,7 +32,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     def generate(
         self,
         messages: list[BaseMessage],
-        tools: Optional[list[Tool]] = None,
+        tool_runtime_context: Optional[ToolRegistry] = None,
         **kwargs,
     ) -> LLMResponse:
         from openai import OpenAI
@@ -39,11 +40,9 @@ class OpenAILLMProvider(BaseLLMProvider):
         client = OpenAI(api_key=self._api_key, base_url=kwargs.get("base_url", None))
 
         raw_messages = [m.to_dict() for m in messages]
-        raw_tools = (
-            [t.to_model_specific(ModelProvider.OPENAI) for t in tools]
-            if tools
-            else None
-        )
+
+        raw_tools = tool_runtime_context.get_all_schemas(ModelProvider.OPENAI) if tool_runtime_context else None
+        Console().log(f"[bold green]OpenAI Provider: Generating response with model {raw_tools}[/bold green]")
 
         params = {
             "model": kwargs.get("model", self._model),
@@ -59,7 +58,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     def generate_stream(
         self,
         messages: list[BaseMessage],
-        tools: Optional[list[Tool]] = None,
+        tool_runtime_context: Optional[ToolRegistry] = None,
         **kwargs,
     ) -> Generator[LLMResponse, None, None]:
         from openai import OpenAI
@@ -67,11 +66,7 @@ class OpenAILLMProvider(BaseLLMProvider):
         client = OpenAI(api_key=self._api_key, base_url=kwargs.get("base_url", None))
 
         raw_messages = [m.to_dict() for m in messages]
-        raw_tools = (
-            [t.to_model_specific(ModelProvider.OPENAI) for t in tools]
-            if tools
-            else None
-        )
+        raw_tools = tool_runtime_context.get_all_schemas(ModelProvider.OPENAI) if tool_runtime_context else None
 
         params = {
             "model": kwargs.get("model", self._model),

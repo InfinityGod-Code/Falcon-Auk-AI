@@ -12,6 +12,7 @@ from backend.messages.tool_call import ToolCall
 from backend.messages.usage import Usage, UsageAccumulator
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.response import LLMResponse
+from backend.tool_runtime_context import ToolRegistry
 
 
 def _message_from_dict(data: dict) -> BaseMessage:
@@ -61,14 +62,15 @@ class LLMLifecycle:
     def __init__(
         self,
         provider: BaseLLMProvider,
-        tools: Optional[list[Tool]] = None,
+        tools: Optional[ToolRegistry] = None,
         system_prompt: Optional[str] = None,
+        usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         self.provider = provider
         self.tools = tools or []
         self.callbacks = provider.callbacks
         self._messages: list[BaseMessage] = []
-        self._usage = UsageAccumulator()
+        self._usage = usage_accumulator or UsageAccumulator()
         self._last_response: Optional[LLMResponse] = None
         self._metadata: dict[str, Any] = {}
 

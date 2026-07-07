@@ -16,7 +16,8 @@ from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
 from backend.messages.base_message import BaseMessage
-from backend.agents.context import ContextManager
+from backend.messages.usage import UsageAccumulator
+from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager
 from backend.agents.base_agent import BaseAgent
 
@@ -39,9 +40,10 @@ class MultiAgent(BaseAgent, ABC):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
-        context_manager: Optional[ContextManager] = None,
+        context_manager: Optional[MemoryContextManager] = None,
         checkpoint_manager: Optional[CheckpointManager] = None,
         agents: Optional[dict[str, BaseAgent]] = None,
+        usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         super().__init__(
             provider,
@@ -51,6 +53,7 @@ class MultiAgent(BaseAgent, ABC):
             name,
             context_manager=context_manager,
             checkpoint_manager=checkpoint_manager,
+            usage_accumulator=usage_accumulator,
         )
         self._agents: dict[str, BaseAgent] = agents or {}
 

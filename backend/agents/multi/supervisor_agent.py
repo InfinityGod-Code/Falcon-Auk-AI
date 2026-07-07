@@ -17,6 +17,7 @@ from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.lifecycle import LLMLifecycle
 from backend.llm_providers.response import LLMResponse
 from backend.messages.base_message import SystemMessage, UserMessage, AssistantMessage
+from backend.messages.usage import UsageAccumulator
 from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import AgentEvent, CompletionEvent
 from backend.agents.events.stream_event import (
@@ -25,7 +26,7 @@ from backend.agents.events.stream_event import (
     DoneStreamEvent,
     ErrorStreamEvent,
 )
-from backend.agents.context import ContextManager
+from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager
 from backend.agents.multi.multi_agent import MultiAgent
 
@@ -68,10 +69,12 @@ class SupervisorAgent(MultiAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
-        context_manager: Optional[ContextManager] = None,
+        context_manager: Optional[MemoryContextManager] = None,
         checkpoint_manager: Optional[CheckpointManager] = None,
         agents: Optional[dict[str, BaseAgent]] = None,
         max_delegations: int = 3,
+        lifecycle: Optional[LLMLifecycle] = None,
+        usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         super().__init__(
             provider,
@@ -82,6 +85,7 @@ class SupervisorAgent(MultiAgent):
             context_manager=context_manager,
             checkpoint_manager=checkpoint_manager,
             agents=agents,
+            usage_accumulator=usage_accumulator,
         )
         self._max_delegations = max_delegations
 
@@ -91,7 +95,10 @@ class SupervisorAgent(MultiAgent):
         )
         prompt = system_prompt or _SUPERVISOR_PROMPT.format(agent_list=agents_list)
 
-        self._lifecycle = LLMLifecycle(provider=provider, tools=None)
+        if lifecycle is not None:
+            self._lifecycle = lifecycle
+        else:
+            self._lifecycle = LLMLifecycle(provider=provider, tools=None)
         self._lifecycle.add_message(SystemMessage(content=prompt))
 
     def _parse_delegation(self, text: str) -> Optional[tuple[str, str]]:

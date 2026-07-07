@@ -20,7 +20,8 @@ from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.lifecycle import LLMLifecycle
 from backend.llm_providers.response import LLMResponse
 from backend.messages.base_message import SystemMessage, UserMessage, AssistantMessage
-from backend.agents.context import ContextManager
+from backend.messages.usage import UsageAccumulator
+from backend.agents.memory_context import MemoryContextManager
 from backend.agents.checkpoint import CheckpointManager
 from backend.agents.base_agent import BaseAgent
 from backend.agents.events.event import (
@@ -32,7 +33,6 @@ from backend.agents.events.event import (
 )
 from backend.agents.events.stream_event import (
     StreamEvent,
-    TokenStreamEvent,
     DoneStreamEvent,
     ErrorStreamEvent,
 )
@@ -72,10 +72,12 @@ class ReActAgent(BaseAgent):
         system_prompt: Optional[str] = None,
         callbacks: Optional[CallbackManager] = None,
         name: Optional[str] = None,
-        context_manager: Optional[ContextManager] = None,
+        context_manager: Optional[MemoryContextManager] = None,
         checkpoint_manager: Optional[CheckpointManager] = None,
         tool_executor: Optional[Callable[[str, str], Any]] = None,
         max_steps: int = 10,
+        lifecycle: Optional[LLMLifecycle] = None,
+        usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         super().__init__(
             provider,
@@ -85,6 +87,7 @@ class ReActAgent(BaseAgent):
             name,
             context_manager=context_manager,
             checkpoint_manager=checkpoint_manager,
+            usage_accumulator=usage_accumulator,
         )
         self._tool_executor = tool_executor
         self._max_steps = max_steps
@@ -96,10 +99,10 @@ class ReActAgent(BaseAgent):
         if tool_descriptions:
             prompt += f"\n\nAvailable tools:\n{tool_descriptions}"
 
-        self._lifecycle = LLMLifecycle(
-            provider=provider,
-            tools=None,
-        )
+        if lifecycle is not None:
+            self._lifecycle = lifecycle
+        else:
+            self._lifecycle = LLMLifecycle(provider=provider, tools=None)
         self._lifecycle.add_message(SystemMessage(content=prompt))
 
     def _parse_action(self, text: str) -> Optional[tuple[str, str]]:
@@ -182,8 +185,6 @@ class ReActAgent(BaseAgent):
                 result = self._tool_executor(tool_name, tool_input)
                 obs = str(result)
                 self.emit(ToolResultEvent("", tool_name, result, self.name))
-
-            from backend.messages.base_message import ToolMessage as TMsg
 
             self._lifecycle.add_message(AssistantMessage(content=f"OBSERVATION: {obs}"))
 

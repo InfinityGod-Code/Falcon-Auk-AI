@@ -13,9 +13,9 @@ from backend.agents.events import (
     DoneStreamEvent,
     ErrorStreamEvent,
 )
-from backend.agents.context import (
-    ContextManager,
-    ContextStrategy,
+from backend.agents.memory_context import (
+    MemoryContextManager,
+    MemoryContextStrategy,
     SlidingWindowStrategy,
     TokenBudgetStrategy,
     SummarizationStrategy,
@@ -28,7 +28,7 @@ from backend.agents.checkpoint import (
     LocalFileCheckpointStore,
     CheckpointManager,
 )
-from backend.agents.mono import MonoAgent, ReActAgent, ToolCallingAgent
+from backend.agents.mono import MonoAgent, ReActAgent
 from backend.agents.multi import MultiAgent, SupervisorAgent, SwarmAgent
 from backend.agents.graph import (
     Node,
@@ -51,8 +51,8 @@ __all__ = [
     "CompletionEvent",
     "CheckpointCreatedEvent",
     # Context
-    "ContextManager",
-    "ContextStrategy",
+    "MemoryContextManager",
+    "MemoryContextStrategy",
     "SlidingWindowStrategy",
     "TokenBudgetStrategy",
     "SummarizationStrategy",
@@ -71,7 +71,6 @@ __all__ = [
     # Mono
     "MonoAgent",
     "ReActAgent",
-    "ToolCallingAgent",
     # Multi
     "MultiAgent",
     "SupervisorAgent",

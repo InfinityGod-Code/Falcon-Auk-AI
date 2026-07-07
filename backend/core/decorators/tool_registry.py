@@ -1,10 +1,9 @@
-from backend.application_context import ApplicationContext
-from backend.core.dependencies.dependency import container
+from backend.tool_runtime_context import ToolRegistry
 from backend.tools.open_ai.falcon_auk_tool import FalconAukTool
 
 
-class ToolRegistry:
-    def __init__(self, context: ApplicationContext):
+class ToolRegistryExecutor:
+    def __init__(self, context: ToolRegistry):
         self.context = context
 
     def tool(self, name: str, description: str):
@@ -20,5 +19,3 @@ class ToolRegistry:
 
         return decorator
 
-
-registry = ToolRegistry(container.context())
