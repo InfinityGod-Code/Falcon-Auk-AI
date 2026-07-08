@@ -78,7 +78,7 @@ class MonoAgent(BaseAgent):
 
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
-        executor = ToolRunner(self.tools) if self.tools else None
+        tool_runner = ToolRunner(self.tools) if self.tools else None
 
         messages: List[BaseMessage] = [
             SystemMessage(content=self.system_prompt),
@@ -123,12 +123,12 @@ class MonoAgent(BaseAgent):
                 f"[MonoAgent] LLM responded with {len(response.message.tool_calls)} tool call(s)"
             )
 
-            if executor:
+            if tool_runner:
                 for tc in response.message.tool_calls:
                     _cb(current_tool=tc.function["name"], tool_name=tc.function["name"])
                     _log(f"[MonoAgent] Executing tool: {tc.function['name']}")
 
-                    result = executor.execute(tc)
+                    result = tool_runner.execute(tc)
                     messages.append(
                         ToolMessage(
                             content=result,

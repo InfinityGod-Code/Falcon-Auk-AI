@@ -63,8 +63,6 @@ class BaseAgent(ABC):
             defaultdict(list)
         )
 
-    # ── Abstract execution methods ──────────────────────────────────
-
     @abstractmethod
     def run(self, user_input: str, **kwargs) -> LLMResponse:
         """Execute the agent on a single user input and return a response."""
