@@ -72,13 +72,13 @@ class MonoAgent(BaseAgent):
             self._lifecycle.add_message(SystemMessage(content=system_prompt))
 
     def run(self, user_input: str, max_iters: int = 10, **kwargs) -> LLMResponse:
-        from backend.agents.tool_executor import ToolExecutor
+        from backend.agents.tool_runner import ToolRunner
         from backend.agents.states.agent_state import AgentState
         from backend.messages.base_message import ToolMessage
 
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
-        executor = ToolExecutor(self.tools) if self.tools else None
+        executor = ToolRunner(self.tools) if self.tools else None
 
         messages: List[BaseMessage] = [
             SystemMessage(content=self.system_prompt),

@@ -5,7 +5,7 @@ from backend.tool_registry import ToolRegistry
 
 """This is responsible for extracting the tool or function from the LLM Tool Response, parse and loads the 
    tools arguments to the function and return the result in the string format."""
-class ToolExecutor:
+class ToolRunner:
     "ToolRegistry contains map where tool name is the key and instance is the FalconAukTool"
     def __init__(self, registry: ToolRegistry):
         self._registry = registry

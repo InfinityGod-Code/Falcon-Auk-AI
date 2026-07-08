@@ -19,5 +19,4 @@ class ToolRegistryExecutor:
 
         return decorator
 
-    def get_all_schemas(self, provider: str) -> list:
-        return self.context.get_all_schemas(provider)
+    

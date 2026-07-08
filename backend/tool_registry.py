@@ -12,7 +12,6 @@ class ToolRegistry:
 
     def register_tool(self, tool_instance: Tool):
         self._registry[tool_instance.name] = tool_instance
-        print(f"✅ System Context: Registered '{tool_instance.name}' tool.")
 
     def get_tool(self, name: str) -> Optional[Tool]:
         return self._registry.get(name)
