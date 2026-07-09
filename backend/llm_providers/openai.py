@@ -10,7 +10,7 @@ from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
 from rich.console import Console
-
+from openai import OpenAI
 from backend.tool_registry import ToolRegistry
 from backend.adapters.openai_adapter import OpenAIAdapter
 
@@ -37,22 +37,19 @@ class OpenAILLMProvider(BaseLLMProvider):
     def generate(
         self,
         messages: list[BaseMessage],
-        tool_runtime_context: Optional[ToolRegistry] = None,
+        tool_registry: Optional[ToolRegistry] = None,
         **kwargs,
     ) -> LLMResponse:
-        from openai import OpenAI
-
+        
         console.log(
             f"[bold green]OpenAI Provider: base URL : {self._base_url}[/bold green]"
         )
 
         client = OpenAI(api_key=self._api_key, base_url=self._base_url)
-
         raw_messages = self._adapter.convert_messages(messages)
-
         raw_tools = (
-            self._adapter.convert_tools(tool_runtime_context)
-            if tool_runtime_context
+            self._adapter.convert_tools(tool_registry)
+            if tool_registry
             else None
         )
         console.log(

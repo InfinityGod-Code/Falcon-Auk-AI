@@ -4,7 +4,9 @@ MonoAgent — single-turn agent.
 The simplest agent pattern: one user message in → one LLM response out.
 No tool loops, no reasoning chains. Wraps LLMLifecycle.run().
 """
-
+from backend.agents.tool_runner import ToolRunner
+from backend.agents.states.agent_state import AgentState
+from backend.messages.base_message import ToolMessage
 from typing import Generator, List, Optional
 from backend.core.base.base_agent_callback import BaseAgentCallback
 from backend.llm_providers.base import BaseLLMProvider
@@ -72,10 +74,6 @@ class MonoAgent(BaseAgent):
             self._lifecycle.add_message(SystemMessage(content=system_prompt))
 
     def run(self, user_input: str, max_iters: int = 10, **kwargs) -> LLMResponse:
-        from backend.agents.tool_runner import ToolRunner
-        from backend.agents.states.agent_state import AgentState
-        from backend.messages.base_message import ToolMessage
-
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
         tool_runner = ToolRunner(self.tools) if self.tools else None
