@@ -6,6 +6,7 @@ from backend.agents.checkpoint import CheckpointManager, InMemoryCheckpointStore
 from backend.llm_providers.lifecycle import LLMLifecycle
 from backend.llm_providers.openai import OpenAILLMProvider
 from backend.tool_registry import ToolRegistry
+from backend.mcp_integration.manager import MCPManager
 
 
 class Container(containers.DeclarativeContainer):
@@ -23,5 +24,7 @@ class Container(containers.DeclarativeContainer):
         LLMLifecycle,
         usage_accumulator=usage_accumulator,
     )
+    mcp_manager = providers.Singleton(MCPManager)
+
 
 container = Container()
