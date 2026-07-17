@@ -49,7 +49,7 @@ class BaseAgent(ABC):
         usage_accumulator: Optional[UsageAccumulator] = None,
     ):
         self.provider = provider
-        self.tools = tools or []
+        self.tools = tools
         self.callbacks = callbacks or CallbackManager()
         self.system_prompt = system_prompt
         self.name = name or self.__class__.__name__

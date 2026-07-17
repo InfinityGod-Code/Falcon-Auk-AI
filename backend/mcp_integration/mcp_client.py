@@ -23,9 +23,11 @@ import asyncio
 import logging
 from typing import Any
 
+import httpx
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamable_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,9 @@ class MCPClient:
              "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]}
 
             {"type": "sse", "url": "http://localhost:8000/sse"}
+
+            {"type": "http", "url": "https://example.com/mcp",
+             "headers": {"Authorization": "Bearer <token>"}}
     """
 
     def __init__(self, server_name: str, transport_config: dict) -> None:
@@ -70,6 +75,8 @@ class MCPClient:
         self._session: ClientSession | None = None
         self._session_cm: Any = None
         self._transport_cm: Any = None
+        self._http_client: httpx.AsyncClient | None = None
+        self._get_session_id: Any = None
 
         # Populated after connect()
         self.server_info: types.Implementation | None = None
@@ -97,14 +104,26 @@ class MCPClient:
             elif transport_type == "sse":
                 self._transport_cm = sse_client(
                     url=self.config["url"],
-                    headers=self.config.get("headers"),
+                )
+            elif transport_type == "http":
+                headers = self.config.get("headers")
+                if headers:
+                    self._http_client = httpx.AsyncClient(headers=headers)
+                self._transport_cm = streamable_http_client(
+                    url=self.config["url"],
+                    http_client=self._http_client,
+                    terminate_on_close=self.config.get("terminate_on_close", True),
                 )
             else:
                 raise MCPConnectionError(
-                    f"Unknown transport type '{transport_type}'; expected 'stdio' or 'sse'"
+                    f"Unknown transport type '{transport_type}'; expected 'stdio', 'sse', or 'http'"
                 )
 
-            read, write = await self._transport_cm.__aenter__()
+            transport_ret = await self._transport_cm.__aenter__()
+            if transport_type == "http":
+                read, write, self._get_session_id = transport_ret
+            else:
+                read, write = transport_ret
             self._session_cm = ClientSession(read, write)
             self._session = await self._session_cm.__aenter__()
 
@@ -133,6 +152,12 @@ class MCPClient:
                 pass
             self._session_cm = None
             self._session = None
+        if self._http_client:
+            try:
+                await self._http_client.aclose()
+            except BaseException:
+                pass
+            self._http_client = None
         if self._transport_cm:
             try:
                 await self._transport_cm.__aexit__(None, None, None)
@@ -140,8 +165,7 @@ class MCPClient:
                 pass
             self._transport_cm = None
 
-        logger.info("[%s] Disconnected", self.server_name)
-
+        self._get_session_id = None
         logger.info("[%s] Disconnected", self.server_name)
 
     @property

@@ -61,10 +61,8 @@ class MCPSession:
 
     def __init__(
         self,
-        agent: BaseAgent,
         converter: MCPToolConverter | None = None,
     ) -> None:
-        self._agent = agent
         self._converter = converter or MCPToolConverter()
         self._manager = MCPManager(converter=self._converter)
         self._registry: ToolRegistry | None = None
@@ -84,7 +82,7 @@ class MCPSession:
 
     # ── Server management ────────────────────────────────────────────
 
-    async def add_server(self, name: str, transport_config: dict) -> None:
+    async def add_server(self, name: str, transport_config: dict) -> ToolRegistry:
         """
         Connect to an MCP server, convert its tools, and register them
         on the agent's ``ToolRegistry``.
@@ -110,6 +108,8 @@ class MCPSession:
             name,
             len(mcp_tools),
         )
+
+        return registry
 
     async def remove_server(self, name: str) -> None:
         """
@@ -137,10 +137,5 @@ class MCPSession:
         """Return the agent's ``ToolRegistry``, creating one if needed."""
         if self._registry is not None:
             return self._registry
-        existing = getattr(self._agent, "tools", None)
-        if isinstance(existing, ToolRegistry):
-            self._registry = existing
-        else:
-            self._registry = ToolRegistry()
-            self._agent.tools = self._registry
+        self._registry = ToolRegistry()
         return self._registry
