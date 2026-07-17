@@ -4,10 +4,11 @@ MonoAgent — single-turn agent.
 The simplest agent pattern: one user message in → one LLM response out.
 No tool loops, no reasoning chains. Wraps LLMLifecycle.run().
 """
+
 from backend.agents.tool_runner import ToolRunner
 from backend.agents.states.agent_state import AgentState
 from backend.messages.base_message import ToolMessage
-from typing import Generator, List, Optional
+from typing import AsyncGenerator, List, Optional
 from backend.core.base.base_agent_callback import BaseAgentCallback
 from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
@@ -73,7 +74,7 @@ class MonoAgent(BaseAgent):
         if system_prompt:
             self._lifecycle.add_message(SystemMessage(content=system_prompt))
 
-    def run(self, user_input: str, max_iters: int = 10, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, max_iters: int = 10, **kwargs) -> LLMResponse:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
         tool_runner = ToolRunner(self.tools) if self.tools else None
@@ -86,15 +87,15 @@ class MonoAgent(BaseAgent):
         def _cb(**overrides):
             if not self.agent_callback:
                 return
-            kwargs = dict(
+            cb_kwargs = dict(
                 total_token_consumed=None,
                 current_tool=None,
                 message_length=len(messages),
                 retry_count=None,
                 tool_name=None,
             )
-            kwargs.update(overrides)
-            self.agent_callback.state(AgentState(**kwargs))
+            cb_kwargs.update(overrides)
+            self.agent_callback.state(AgentState(**cb_kwargs))
 
         def _log(msg: str):
             if self.agent_callback:
@@ -104,7 +105,7 @@ class MonoAgent(BaseAgent):
         _log("[MonoAgent] Run started")
 
         for i in range(max_iters):
-            response = self.provider.generate(
+            response = await self.provider.generate(
                 messages=messages, tool_runtime_context=self.tools
             )
 
@@ -126,7 +127,7 @@ class MonoAgent(BaseAgent):
                     _cb(current_tool=tc.function["name"], tool_name=tc.function["name"])
                     _log(f"[MonoAgent] Executing tool: {tc.function['name']}")
 
-                    result = tool_runner.execute(tc)
+                    result = await tool_runner.execute(tc)
                     messages.append(
                         ToolMessage(
                             content=result,
@@ -145,15 +146,14 @@ class MonoAgent(BaseAgent):
         )
         return response
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[StreamEvent, None, LLMResponse]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
         try:
-            generator = self._lifecycle.run_stream(user_input, **kwargs)
             final = None
-            for chunk in generator:
+            async for chunk in self._lifecycle.run_stream(user_input, **kwargs):
                 if chunk.message.content:
                     event = TokenStreamEvent(chunk.message.content)
                     yield event
@@ -172,8 +172,6 @@ class MonoAgent(BaseAgent):
             self.emit(
                 CompletionEvent(response.message.content, response.usage, self.name)
             )
-
-            return response
 
         except Exception as e:
             err_event = ErrorStreamEvent(e)

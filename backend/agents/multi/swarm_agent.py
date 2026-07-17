@@ -9,8 +9,8 @@ Useful for fact-checking, diverse perspective generation, and
 tasks that benefit from multiple "points of view".
 """
 
-from typing import Any, Generator, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+from typing import Any, AsyncGenerator, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
@@ -98,51 +98,42 @@ class SwarmAgent(MultiAgent):
         else:
             self._lifecycle = LLMLifecycle(provider=provider, tools=None)
 
-    def _run_agents_sequential(self, user_input: str, **kwargs) -> dict[str, str]:
+    async def _run_agents_sequential(self, user_input: str, **kwargs) -> dict[str, str]:
         results = {}
         for name, agent in self._agents.items():
-            resp = agent.run(user_input, **kwargs)
+            resp = await agent.run(user_input, **kwargs)
             results[name] = resp.message.content or ""
             self._usage.add(resp.usage)
         return results
 
-    def _run_agents_parallel(self, user_input: str, **kwargs) -> dict[str, str]:
-        results = {}
-
-        def _run(name: str, agent: BaseAgent) -> tuple[str, str]:
-            resp = agent.run(user_input, **kwargs)
+    async def _run_agents_parallel(self, user_input: str, **kwargs) -> dict[str, str]:
+        async def _run(name: str, agent: BaseAgent) -> tuple[str, str]:
+            resp = await agent.run(user_input, **kwargs)
             self._usage.add(resp.usage)
             return name, resp.message.content or ""
 
-        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
-            futures = {
-                pool.submit(_run, name, agent): name
-                for name, agent in self._agents.items()
-            }
-            for future in as_completed(futures):
-                name, content = future.result()
-                results[name] = content
+        tasks = [_run(name, agent) for name, agent in self._agents.items()]
+        results_list = await asyncio.gather(*tasks)
+        return dict(results_list)
 
-        return results
-
-    def _synthesize(self, results: dict[str, str], **kwargs) -> LLMResponse:
+    async def _synthesize(self, results: dict[str, str], **kwargs) -> LLMResponse:
         formatted = "\n\n".join(
             f"=== {name} ===\n{content}" for name, content in results.items()
         )
         synthesis_question = self._synthesis_prompt_template.format(responses=formatted)
         self._lifecycle.add_message(UserMessage(content=synthesis_question))
 
-        return self._lifecycle.run(synthesis_question, **kwargs)
+        return await self._lifecycle.run(synthesis_question, **kwargs)
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
         if self._parallel:
-            results = self._run_agents_parallel(user_input, **kwargs)
+            results = await self._run_agents_parallel(user_input, **kwargs)
         else:
-            results = self._run_agents_sequential(user_input, **kwargs)
+            results = await self._run_agents_sequential(user_input, **kwargs)
 
-        synthesized = self._synthesize(results, **kwargs)
+        synthesized = await self._synthesize(results, **kwargs)
         self._usage.add(synthesized.usage)
 
         self.emit(
@@ -151,14 +142,13 @@ class SwarmAgent(MultiAgent):
 
         return synthesized
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[StreamEvent, None, LLMResponse]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         try:
-            response = self.run(user_input, **kwargs)
+            response = await self.run(user_input, **kwargs)
             yield DoneStreamEvent(response.usage)
-            return response
         except Exception as e:
             yield ErrorStreamEvent(e)
             self.emit(AgentEvent("error", {"message": str(e)}, self.name))

@@ -9,7 +9,7 @@ Sub-agents are registered by name and can be any BaseAgent.
 """
 
 from abc import ABC
-from typing import Any, Generator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
@@ -82,12 +82,10 @@ class MultiAgent(BaseAgent, ABC):
 
     # ── Execution (delegated to subclasses) ─────────────────────────
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         raise NotImplementedError(f"{self.__class__.__name__} must implement run()")
 
-    def run_stream(
-        self, user_input: str, **kwargs
-    ) -> Generator[Any, None, LLMResponse]:
+    async def run_stream(self, user_input: str, **kwargs) -> AsyncGenerator[Any, None]:
         raise NotImplementedError(
             f"{self.__class__.__name__} must implement run_stream()"
         )

@@ -2,17 +2,20 @@ import json
 
 from backend.messages.tool_call import ToolCall
 from backend.tool_registry import ToolRegistry
+from backend.mcp_integration.mcp_tool import MCPTool
 
-"""This is responsible for extracting the tool or function from the LLM Tool Response, parse and loads the 
-   tools arguments to the function and return the result in the string format."""
+
 class ToolRunner:
-    "ToolRegistry contains map where tool name is the key and instance is the FalconAukTool"
+    """
+    Responsible for resolving a tool call from the LLM into an actual
+    function execution.  Supports both sync FalconAukTool instances
+    and async MCPTool instances.
+    """
+
     def __init__(self, registry: ToolRegistry):
         self._registry = registry
 
-    
-    def execute(self, tool_call: ToolCall) -> str:
-        # name of the tool from the LLM tool call
+    async def execute(self, tool_call: ToolCall) -> str:
         name = tool_call.function["name"]
         args = json.loads(tool_call.function["arguments"])
 
@@ -21,7 +24,10 @@ class ToolRunner:
             return f"Error: tool '{name}' not found"
 
         try:
-            result = tool.func(**args)
+            if isinstance(tool, MCPTool):
+                result = await tool.async_run(**args)
+            else:
+                result = tool.func(**args)
             return str(result)
         except Exception as e:
             return f"Error executing '{name}': {e}"

@@ -9,8 +9,8 @@ branches at synchronization points.
 Suitable for tasks like: research → (write + illustrate) → merge → review
 """
 
-from typing import Any, Callable, Generator, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+from typing import Any, AsyncGenerator, Callable, Optional
 from collections import defaultdict, deque
 
 from backend.core.base.tools.tool import Tool
@@ -107,7 +107,7 @@ class WorkflowAgent(GraphAgent):
 
         return children, in_degree
 
-    def _execute_workflow(self, user_input: str, **kwargs) -> str:
+    async def _execute_workflow(self, user_input: str, **kwargs) -> str:
         """
         Execute the DAG using topological ordering with parallel fan-out.
         """
@@ -122,29 +122,27 @@ class WorkflowAgent(GraphAgent):
         node_inputs: dict[str, str] = {}
         node_inputs[self._entry_point] = user_input
 
-        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+        while ready:
+            batch = list(ready)
+            ready.clear()
 
-            def _run_node(name: str) -> tuple[str, str]:
+            async def _run_node(name: str) -> tuple[str, str]:
                 node = self._node_map[name]
                 inp = node_inputs.get(name, user_input)
-                content = self._execute_node(node, inp, **kwargs)
+                content = await self._execute_node(node, inp, **kwargs)
                 return name, content
 
-            while ready:
-                batch = list(ready)
-                ready.clear()
+            tasks = [_run_node(name) for name in batch]
+            completed = await asyncio.gather(*tasks)
 
-                futures = {pool.submit(_run_node, name): name for name in batch}
+            for name, content in completed:
+                results[name] = content
 
-                for future in as_completed(futures):
-                    name, content = future.result()
-                    results[name] = content
-
-                    for child in children.get(name, []):
-                        in_degree[child] -= 1
-                        if in_degree[child] == 0:
-                            node_inputs[child] = content
-                            ready.append(child)
+                for child in children.get(name, []):
+                    in_degree[child] -= 1
+                    if in_degree[child] == 0:
+                        node_inputs[child] = content
+                        ready.append(child)
 
         terminal = self._terminal_nodes & results.keys()
         if terminal:
@@ -154,10 +152,10 @@ class WorkflowAgent(GraphAgent):
         last_node = max(results.keys(), key=lambda n: list(results.keys()).index(n))
         return results[last_node]
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
-        content = self._execute_workflow(user_input, **kwargs)
+        content = await self._execute_workflow(user_input, **kwargs)
 
         result = LLMResponse(
             message=AssistantMessage(content=content),
@@ -166,14 +164,13 @@ class WorkflowAgent(GraphAgent):
         self.emit(CompletionEvent(content, self._usage.total, self.name))
         return result
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[StreamEvent, None, LLMResponse]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         try:
-            response = self.run(user_input, **kwargs)
+            response = await self.run(user_input, **kwargs)
             yield DoneStreamEvent(response.usage)
-            return response
         except Exception as e:
             yield ErrorStreamEvent(e)
             self.emit(AgentEvent("error", {"message": str(e)}, self.name))

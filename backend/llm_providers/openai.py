@@ -1,4 +1,4 @@
-from typing import Generator, Optional
+from typing import AsyncGenerator, Optional
 from backend.core.base.models.model import ModelProvider
 from backend.messages.base_message import (
     AssistantMessage,
@@ -10,7 +10,7 @@ from backend.llm_providers.base import BaseLLMProvider
 from backend.llm_providers.callback import CallbackManager
 from backend.llm_providers.response import LLMResponse
 from rich.console import Console
-from openai import OpenAI
+from openai import AsyncOpenAI
 from backend.tool_registry import ToolRegistry
 from backend.adapters.openai_adapter import OpenAIAdapter
 
@@ -29,28 +29,25 @@ class OpenAILLMProvider(BaseLLMProvider):
         self._base_url = kwargs.get("base_url")
         self._max_tokens = kwargs.get("max_tokens", 4096)
         self._adapter = OpenAIAdapter()
+        self._client = AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
     @property
     def provider(self) -> ModelProvider:
         return ModelProvider.OPENAI
 
-    def generate(
+    async def generate(
         self,
         messages: list[BaseMessage],
         tool_registry: Optional[ToolRegistry] = None,
         **kwargs,
     ) -> LLMResponse:
-        
         console.log(
             f"[bold green]OpenAI Provider: base URL : {self._base_url}[/bold green]"
         )
 
-        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
         raw_messages = self._adapter.convert_messages(messages)
         raw_tools = (
-            self._adapter.convert_tools(tool_registry)
-            if tool_registry
-            else None
+            self._adapter.convert_tools(tool_registry) if tool_registry else None
         )
         console.log(
             f"[bold green]OpenAI Provider: Generating response with model {raw_tools}[/bold green]"
@@ -64,7 +61,7 @@ class OpenAILLMProvider(BaseLLMProvider):
         if raw_tools:
             params["tools"] = raw_tools
 
-        response = client.chat.completions.create(**params)
+        response = await self._client.chat.completions.create(**params)
         normalized = self._adapter.normalize_response(response)
 
         return LLMResponse(
@@ -75,16 +72,12 @@ class OpenAILLMProvider(BaseLLMProvider):
             raw_response=response,
         )
 
-    def generate_stream(
+    async def generate_stream(
         self,
         messages: list[BaseMessage],
         tool_runtime_context: Optional[ToolRegistry] = None,
         **kwargs,
-    ) -> Generator[LLMResponse, None, None]:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
-
+    ) -> AsyncGenerator[LLMResponse, None]:
         raw_messages = self._adapter.convert_messages(messages)
         raw_tools = (
             self._adapter.convert_tools(tool_runtime_context)
@@ -101,13 +94,13 @@ class OpenAILLMProvider(BaseLLMProvider):
         if raw_tools:
             params["tools"] = raw_tools
 
-        stream = client.chat.completions.create(**params)
+        stream = await self._client.chat.completions.create(**params)
 
         full_content = ""
         tool_calls: dict[int, dict] = {}
         usage = None
 
-        for chunk in stream:
+        async for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta is None:
                 continue

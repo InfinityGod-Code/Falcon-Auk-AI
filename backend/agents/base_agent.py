@@ -10,7 +10,7 @@ All agents share:
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Any, Callable, Generator, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.messages.base_message import BaseMessage
@@ -64,19 +64,17 @@ class BaseAgent(ABC):
         )
 
     @abstractmethod
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         """Execute the agent on a single user input and return a response."""
         ...
 
     @abstractmethod
-    def run_stream(
-        self, user_input: str, **kwargs
-    ) -> Generator[Any, None, LLMResponse]:
+    async def run_stream(self, user_input: str, **kwargs) -> AsyncGenerator[Any, None]:
         """
         Execute the agent in streaming mode.
 
         Yields stream events (tokens, tool_calls, etc.)
-        and returns the final LLMResponse.
+        and returns the final LLMResponse via StopAsyncIteration.
         """
         ...
 

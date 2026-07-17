@@ -10,7 +10,7 @@ Supports conditional branching via edge conditions and optional
 node-level callbacks.
 """
 
-from typing import Any, Callable, Generator, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
@@ -167,16 +167,16 @@ class GraphAgent(BaseAgent):
                 return edge.to_node
         return None
 
-    def _execute_node(self, node: Node, user_input: str, **kwargs) -> str:
+    async def _execute_node(self, node: Node, user_input: str, **kwargs) -> str:
         """Run a single node's agent and return the response content."""
-        resp = node.agent.run(user_input, **kwargs)
+        resp = await node.agent.run(user_input, **kwargs)
         self._usage.add(resp.usage)
         content = resp.message.content or ""
         self._context["node_results"][node.name] = content
         self._context["current_node"] = node.name
         return content
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         self._context["user_input"] = user_input
 
@@ -189,7 +189,7 @@ class GraphAgent(BaseAgent):
             if node is None:
                 raise ValueError(f"Node '{current}' not found in graph.")
 
-            content = self._execute_node(node, content or user_input, **kwargs)
+            content = await self._execute_node(node, content or user_input, **kwargs)
 
             if current in self._terminal_nodes:
                 break
@@ -204,14 +204,13 @@ class GraphAgent(BaseAgent):
         self.emit(CompletionEvent(content, self._usage.total, self.name))
         return result
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[StreamEvent, None, LLMResponse]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         try:
-            response = self.run(user_input, **kwargs)
+            response = await self.run(user_input, **kwargs)
             yield DoneStreamEvent(response.usage)
-            return response
         except Exception as e:
             yield ErrorStreamEvent(e)
             self.emit(AgentEvent("error", {"message": str(e)}, self.name))

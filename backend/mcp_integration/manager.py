@@ -9,24 +9,26 @@ Usage
 -----
     manager = MCPManager()
 
-    manager.add_server("filesystem", {
+    await manager.add_server("filesystem", {
         "type": "stdio",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
     })
 
-    for tool in manager.get_all_tools():
+    for tool in await manager.get_all_tools():
         tool_registry.register_tool(tool)
 
     # On shutdown:
-    manager.shutdown()
+    await manager.shutdown()
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
+
 from backend.mcp_integration.mcp_client import MCPClient
+from backend.mcp_integration.converter import MCPToolConverter
 from backend.mcp_integration.mcp_tool import MCPTool
 
 logger = logging.getLogger(__name__)
@@ -39,14 +41,19 @@ class MCPManager:
     Each server is identified by a unique ``name``.  Tools are exposed
     with the convention ``{server_name}_{tool_name}`` to avoid name
     collisions across servers.
+
+    The *converter* argument lets you plug in a custom
+    ``MCPToolConverter`` subclass to control naming, schema
+    transformation, or filtering.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, converter: MCPToolConverter | None = None) -> None:
         self._clients: dict[str, MCPClient] = {}
+        self._converter = converter or MCPToolConverter()
 
     # ── Lifecycle ────────────────────────────────────────────────────
 
-    def add_server(self, name: str, transport_config: dict) -> MCPClient:
+    async def add_server(self, name: str, transport_config: dict) -> MCPClient:
         """
         Connect to an MCP server and register it.
 
@@ -79,7 +86,7 @@ class MCPManager:
             )
 
         client = MCPClient(server_name=name, transport_config=transport_config)
-        client.connect()
+        await client.connect()
         self._clients[name] = client
         logger.info(
             "[MCPManager] Added server '%s' (%s transport)",
@@ -88,7 +95,7 @@ class MCPManager:
         )
         return client
 
-    def remove_server(self, name: str) -> None:
+    async def remove_server(self, name: str) -> None:
         """
         Disconnect from an MCP server and unregister it.
 
@@ -97,19 +104,22 @@ class MCPManager:
         """
         client = self._clients.pop(name, None)
         if client:
-            client.disconnect()
+            await client.disconnect()
             logger.info("[MCPManager] Removed server '%s'", name)
 
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         """
         Disconnect from every registered MCP server.
 
-        Call this during application teardown (e.g. ``finally`` block or
-        signal handler) to ensure clean closure of all transport streams
-        and event-loop threads.
+        Call this during application teardown to ensure clean closure
+        of all transport streams and event-loop threads.
+
+        Note: disconnects in reverse-registration order (LIFO) because
+        ``anyio`` cancel scopes are stacked per-task — exiting them in
+        FIFO order triggers a ``RuntimeError``.
         """
-        for name in list(self._clients):
-            self.remove_server(name)
+        for name in reversed(list(self._clients)):
+            await self.remove_server(name)
         logger.info("[MCPManager] All servers shut down")
 
     # ── Queries ──────────────────────────────────────────────────────
@@ -123,7 +133,7 @@ class MCPManager:
         """Return the names of all connected servers."""
         return list(self._clients.keys())
 
-    def get_all_tools(self) -> list[MCPTool]:
+    async def get_all_tools(self) -> list[MCPTool]:
         """
         Aggregate tools from every connected server.
 
@@ -143,27 +153,16 @@ class MCPManager:
                 )
                 continue
             try:
-                mcp_tools = client.list_tools()
+                mcp_tools = await client.list_tools()
             except Exception:
                 logger.exception(
                     "[MCPManager] Failed to list tools from '%s'", server_name
                 )
                 continue
-            for mt in mcp_tools:
-                prefixed_name = f"{server_name}_{mt.name}"
-                tools.append(
-                    MCPTool(
-                        name=prefixed_name,
-                        description=mt.description or "",
-                        input_schema=mt.inputSchema,
-                        mcp_client=client,
-                        server_name=server_name,
-                        original_tool_name=mt.name,
-                    )
-                )
+            tools.extend(self._converter.convert(server_name, mcp_tools, client))
         return tools
 
-    def get_all_tool_dicts(self) -> list[dict[str, Any]]:
+    async def get_all_tool_dicts(self) -> list[dict[str, Any]]:
         """
         Convenience: return every tool as a dict with keys
         ``server_name``, ``tool_name``, ``description``, ``schema``.
@@ -174,7 +173,7 @@ class MCPManager:
             if not client.is_connected:
                 continue
             try:
-                for mt in client.list_tools():
+                for mt in await client.list_tools():
                     entries.append(
                         {
                             "server_name": server_name,

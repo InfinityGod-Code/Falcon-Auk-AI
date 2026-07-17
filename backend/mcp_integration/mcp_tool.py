@@ -15,13 +15,12 @@ Integration flow
         │
         ├── registry.get_tool("filesystem_read") → MCPTool
         │
-        └── tool.func(**args)
+        ├── tool.func(**args)          ← sync (FalconAukTool compat)
+        └── await tool.async_run(...)  ← async (preferred from async pipeline)
               │
-              └── MCPTool.run(**kwargs)
+              └── await MCPClient.call_tool(name, kwargs)
                     │
-                    └── MCPClient.call_tool(name, kwargs)
-                          │
-                          └── bg event loop → ClientSession → MCP Server
+                    └── ClientSession → MCP Server
 """
 
 from __future__ import annotations
@@ -42,8 +41,8 @@ class MCPTool(Tool):
     Parameters
     ----------
     name:
-        Programmatic tool name (prefixed with ``{server_name}_`` to avoid
-        collisions when multiple MCP servers are connected).
+        Prefixed name used when registering in ToolRegistry (e.g.
+        ``"filesystem_read"``).  The LLM sees this name.
     description:
         Human-readable description forwarded to the LLM.
     input_schema:
@@ -53,6 +52,9 @@ class MCPTool(Tool):
         exposing this tool.
     server_name:
         Label used in error messages and logging.
+    original_tool_name:
+        The tool's name as the MCP server knows it (e.g. ``"read"``).
+        Defaults to *name* when the tool doesn't need a prefix.
     """
 
     def __init__(
@@ -64,40 +66,30 @@ class MCPTool(Tool):
         server_name: str,
         original_tool_name: str | None = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        name:
-            Prefixed name used when registering in ToolRegistry (e.g.
-            ``"filesystem_read"``).  The LLM sees this name.
-        original_tool_name:
-            The tool's name as the MCP server knows it (e.g. ``"read"``).
-            Defaults to *name* when the tool doesn't need a prefix.
-        """
         self.name = name
         self.description = description
         self.input_schema = input_schema
         self._client = mcp_client
         self._server_name = server_name
         self._mcp_name = original_tool_name or name
-        self.func = self.run  # ToolRunner calls tool.func(**args)
+        self.func = self.run
 
     def run(self, **kwargs: Any) -> str:
         """
-        Execute the tool via the MCP client.
-
-        This is called by ``ToolRunner.execute()`` as ``tool.func(**args)``.
-        The actual MCP call happens on the client's background event-loop
-        thread; this method blocks until the result is returned.
-
-        Raises
-        ------
-        MCPToolError
-            If the server reported an error.
-        MCPTimeoutError
-            If the call exceeded the configured timeout.
+        Synchronous execution — used by ``ToolRunner.execute()`` when the
+        caller is not in an async context.  Falls back to the async path
+        via ``asyncio.run()``.
         """
-        return self._client.call_tool(self._mcp_name, kwargs)
+        import asyncio
+
+        return asyncio.run(self.async_run(**kwargs))
+
+    async def async_run(self, **kwargs: Any) -> str:
+        """
+        Async execution — preferred from the async agent pipeline.
+        Calls the MCP client directly without any thread bridge.
+        """
+        return await self._client.call_tool(self._mcp_name, kwargs)
 
     def to_model_specific(self, model_provider: ModelProvider) -> dict[str, Any]:
         """

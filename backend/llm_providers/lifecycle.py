@@ -1,4 +1,4 @@
-from typing import Any, Callable, Generator, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.messages.base_message import (
@@ -101,7 +101,7 @@ class LLMLifecycle:
         else:
             self._messages = []
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         self._messages.append(UserMessage(content=user_input))
 
         self.callbacks.on_generation_start(
@@ -109,7 +109,7 @@ class LLMLifecycle:
         )
 
         try:
-            response = self.provider.generate(
+            response = await self.provider.generate(
                 messages=self._messages,
                 tools=self.tools or None,
                 **kwargs,
@@ -126,9 +126,9 @@ class LLMLifecycle:
 
         return response
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[LLMResponse, None, LLMResponse]:
+    ) -> AsyncGenerator[LLMResponse, LLMResponse]:
         self._messages.append(UserMessage(content=user_input))
 
         self.callbacks.on_generation_start(
@@ -140,7 +140,7 @@ class LLMLifecycle:
         final_usage: Optional[Usage] = None
 
         try:
-            for chunk in self.provider.generate_stream(
+            async for chunk in self.provider.generate_stream(
                 messages=self._messages,
                 tools=self.tools or None,
                 **kwargs,
@@ -168,9 +168,7 @@ class LLMLifecycle:
             response=final_response, usage=final_response.usage
         )
 
-        return final_response
-
-    def run_with_tools(
+    async def run_with_tools(
         self,
         user_input: str,
         tool_executor: Callable[[ToolCall], Any],
@@ -185,7 +183,7 @@ class LLMLifecycle:
             )
 
             try:
-                response = self.provider.generate(
+                response = await self.provider.generate(
                     messages=self._messages,
                     tools=self.tools or None,
                     **kwargs,
@@ -222,7 +220,7 @@ class LLMLifecycle:
                     tool_call_id=tc.id, name=tc.function["name"], result=result
                 )
 
-        response = self.provider.generate(
+        response = await self.provider.generate(
             messages=self._messages, tools=self.tools or None, **kwargs
         )
         self._usage.add(response.usage)

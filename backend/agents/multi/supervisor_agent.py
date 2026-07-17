@@ -9,7 +9,7 @@ calculator_agent).
 Optionally supports multiple rounds of delegation.
 """
 
-from typing import Any, Generator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
@@ -118,13 +118,13 @@ class SupervisorAgent(MultiAgent):
         match = re.search(r"FINAL:\s*(.+)", text, re.DOTALL)
         return match.group(1).strip() if match else None
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
         self._lifecycle.add_message(UserMessage(content=user_input))
 
         for round_num in range(self._max_delegations):
-            response = self._lifecycle.provider.generate(
+            response = await self._lifecycle.provider.generate(
                 messages=self._lifecycle.messages,
                 **kwargs,
             )
@@ -145,7 +145,7 @@ class SupervisorAgent(MultiAgent):
                 agent_name, task = parsed
                 agent = self.get_agent(agent_name)
                 if agent:
-                    agent_result = agent.run(task, **kwargs)
+                    agent_result = await agent.run(task, **kwargs)
                     result_text = agent_result.message.content or ""
                     self._lifecycle.add_message(
                         AssistantMessage(
@@ -159,7 +159,7 @@ class SupervisorAgent(MultiAgent):
                         )
                     )
 
-        response = self._lifecycle.provider.generate(
+        response = await self._lifecycle.provider.generate(
             messages=self._lifecycle.messages,
             **kwargs,
         )
@@ -169,14 +169,13 @@ class SupervisorAgent(MultiAgent):
         )
         return response
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[StreamEvent, None, LLMResponse]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         try:
-            response = self.run(user_input, **kwargs)
+            response = await self.run(user_input, **kwargs)
             yield DoneStreamEvent(response.usage)
-            return response
         except Exception as e:
             yield ErrorStreamEvent(e)
             self.emit(AgentEvent("error", {"message": str(e)}, self.name))

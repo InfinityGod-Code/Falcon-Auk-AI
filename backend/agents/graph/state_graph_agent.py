@@ -9,7 +9,7 @@ This is the most flexible graph pattern, suitable for complex
 multi-step workflows (e.g., research → outline → write → review).
 """
 
-from typing import Any, Callable, Generator, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
@@ -93,32 +93,31 @@ class StateGraphAgent(GraphAgent):
     def state(self) -> dict[str, Any]:
         return dict(self._state)
 
-    def _execute_node(self, node: Node, user_input: str, **kwargs) -> str:
+    async def _execute_node(self, node: Node, user_input: str, **kwargs) -> str:
         """Execute a node, passing state-aware context."""
-        result = super()._execute_node(node, user_input, **kwargs)
+        result = await super()._execute_node(node, user_input, **kwargs)
         self._state[node.name] = result
         return result
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         self._state = self._state_factory()
         self._state["user_input"] = user_input
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
 
-        response = super().run(user_input, **kwargs)
+        response = await super().run(user_input, **kwargs)
 
         self._state["final_output"] = response.message.content
         self.emit(CompletionEvent(response.message.content, response.usage, self.name))
 
         return response
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[StreamEvent, None, LLMResponse]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         try:
-            response = self.run(user_input, **kwargs)
+            response = await self.run(user_input, **kwargs)
             yield DoneStreamEvent(response.usage)
-            return response
         except Exception as e:
             yield ErrorStreamEvent(e)
             self.emit(AgentEvent("error", {"message": str(e)}, self.name))

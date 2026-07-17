@@ -11,8 +11,9 @@ Useful for models or scenarios where native tool calling is
 unavailable or undesired.
 """
 
+import asyncio
 import re
-from typing import Any, Callable, Generator, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
 
 from backend.core.base.tools.tool import Tool
 from backend.llm_providers.base import BaseLLMProvider
@@ -129,12 +130,12 @@ class ReActAgent(BaseAgent):
                 return t
         return None
 
-    def run(self, user_input: str, **kwargs) -> LLMResponse:
+    async def run(self, user_input: str, **kwargs) -> LLMResponse:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         self._lifecycle.add_message(UserMessage(content=user_input))
 
         for step in range(self._max_steps):
-            response = self._lifecycle.provider.generate(
+            response = await self._lifecycle.provider.generate(
                 messages=self._lifecycle.messages,
                 **kwargs,
             )
@@ -182,24 +183,28 @@ class ReActAgent(BaseAgent):
                         self.name,
                     )
                 )
-                result = self._tool_executor(tool_name, tool_input)
+                if asyncio.iscoroutinefunction(self._tool_executor):
+                    result = await self._tool_executor(tool_name, tool_input)
+                else:
+                    result = await asyncio.to_thread(
+                        self._tool_executor, tool_name, tool_input
+                    )
                 obs = str(result)
                 self.emit(ToolResultEvent("", tool_name, result, self.name))
 
             self._lifecycle.add_message(AssistantMessage(content=f"OBSERVATION: {obs}"))
 
-        return self._lifecycle.run("Continue and provide your FINAL_ANSWER.")
+        return await self._lifecycle.run("Continue and provide your FINAL_ANSWER.")
 
-    def run_stream(
+    async def run_stream(
         self, user_input: str, **kwargs
-    ) -> Generator[StreamEvent, None, LLMResponse]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         self.emit(AgentEvent("run_start", {"input": user_input}, self.name))
         self._lifecycle.add_message(UserMessage(content=user_input))
 
         try:
-            response = self.run(user_input, **kwargs)
+            response = await self.run(user_input, **kwargs)
             yield DoneStreamEvent(response.usage)
-            return response
         except Exception as e:
             yield ErrorStreamEvent(e)
             self.emit(AgentEvent("error", {"message": str(e)}, self.name))

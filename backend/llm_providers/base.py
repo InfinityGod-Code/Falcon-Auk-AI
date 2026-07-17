@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generator, Optional
+from typing import AsyncGenerator, Generator, Optional
 from backend.core.base.models.model import ModelProvider
 from backend.messages.base_message import BaseMessage
 from backend.messages.tool_call import ToolCall
@@ -31,7 +31,7 @@ class BaseLLMProvider(ABC):
         pass
 
     @abstractmethod
-    def generate(
+    async def generate(
         self,
         messages: list[BaseMessage],
         tool_runtime_context: Optional[ToolRegistry] = None,
@@ -40,14 +40,13 @@ class BaseLLMProvider(ABC):
         pass
 
     @abstractmethod
-    def generate_stream(
+    async def generate_stream(
         self,
         messages: list[BaseMessage],
         tool_runtime_context: Optional[ToolRegistry] = None,
         **kwargs,
-    ) -> Generator[LLMResponse, None, None]:
+    ) -> AsyncGenerator[LLMResponse, None]:
         pass
-
 
     @abstractmethod
     def count_tokens(self, messages: list[BaseMessage]) -> int: ...
